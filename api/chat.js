@@ -7,19 +7,24 @@ module.exports = async function handler(req, res) {
 
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: "Missing OPENROUTER_API_KEY" });
+    return res.status(500).json({ error: "Missing OPENROUTER_API_KEY in Vercel environment variables" });
   }
 
   const models = [
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "google/gemma-2-9b-it:free",
-    "mistralai/mistral-7b-instruct:free"
+    "qwen/qwen3-coder:free",
+    "deepseek/deepseek-v4-flash:free",
+    "qwen/qwen3-235b-a22b:free",
+    "meta-llama/llama-4-maverick:free",
+    "deepseek/deepseek-chat-v3.1:free",
+    "meta-llama/llama-3.3-70b-instruct:free"
   ];
 
   const { system, messages, max_tokens } = req.body;
   const orMessages = system
     ? [{ role: "system", content: system }, ...messages]
     : messages;
+
+  let lastError = "";
 
   for (const model of models) {
     try {
@@ -40,16 +45,27 @@ module.exports = async function handler(req, res) {
 
       const data = await response.json();
 
-      if (data.error || !data.choices || !data.choices[0]) continue;
+      if (data.error) {
+        lastError = `${model}: ${data.error.message || JSON.stringify(data.error)}`;
+        continue;
+      }
+
+      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+        lastError = `${model}: empty response`;
+        continue;
+      }
 
       return res.status(200).json({
         content: [{ type: "text", text: data.choices[0].message.content }]
       });
 
     } catch (err) {
+      lastError = `${model}: ${err.message}`;
       continue;
     }
   }
 
-  return res.status(500).json({ error: "All free models failed. Please try again in a moment." });
+  return res.status(500).json({
+    error: `All models failed. Last error: ${lastError}. Try again in a moment.`
+  });
 };
