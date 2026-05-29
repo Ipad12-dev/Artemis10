@@ -5,55 +5,35 @@ module.exports = async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const groqKey = process.env.GROQ_API_KEY;
+  const grokKey = process.env.GROK_API_KEY;
+  const apiKey = groqKey || grokKey;
+
   if (!apiKey) {
-    return res.status(500).json({ error: "Missing GEMINI_API_KEY — add it in Vercel Settings → Environment Variables" });
+    return res.status(500).json({ error: "No API key found. Add GROQ_API_KEY or GROK_API_KEY in Vercel Settings → Environment Variables" });
   }
 
-  const { system, messages, max_tokens } = req.body;
+  const isGrok = !!grokKey && !groqKey;
+  const endpoint = isGrok ? "https://api.x.ai/v1/chat/completions" : "https://api.groq.com/openai/v1/chat/completions";
+  const model = isGrok ? "grok-3-mini-beta" : "llama-3.3-70b-versatile";
 
-  // Gemini uses OpenAI-compatible format
-  const geminiMessages = system
-    ? [{ role: "user", content: `SYSTEM INSTRUCTIONS:\n${system}\n\nNow respond to the following:` },
-       { role: "model", content: "Understood. I will follow those instructions exactly." },
-       ...messages]
-    : messages;
+  const { system, messages, max_tokens } = req.body;
+  const fullMessages = system ? [{ role: "system", content: system }, ...messages] : messages;
 
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: geminiMessages.map(m => ({
-            role: m.role === "assistant" ? "model" : m.role === "model" ? "model" : "user",
-            parts: [{ text: m.content }]
-          })),
-          generationConfig: {
-            maxOutputTokens: max_tokens || 8192,
-            temperature: 0.7
-          }
-        })
-      }
-    );
-
-    const data = await response.json();
-
-    if (data.error) {
-      return res.status(500).json({ error: "Gemini error: " + (data.error.message || JSON.stringify(data.error)) });
-    }
-
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) {
-      return res.status(500).json({ error: "Empty response from Gemini. Try again." });
-    }
-
-    // Return in Anthropic format so frontend works unchanged
-    return res.status(200).json({
-      content: [{ type: "text", text }]
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+      body: JSON.stringify({ model, max_tokens: max_tokens || 8192, messages: fullMessages })
     });
 
+    const data = await response.json();
+    if (data.error) return res.status(500).json({ error: data.error.message || JSON.stringify(data.error) });
+
+    const text = data.choices?.[0]?.message?.content;
+    if (!text) return res.status(500).json({ error: "Empty response. Try again." });
+
+    return res.status(200).json({ content: [{ type: "text", text }] });
   } catch (err) {
     return res.status(500).json({ error: "Request failed: " + err.message });
   }
