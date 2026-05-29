@@ -31,7 +31,7 @@ module.exports = async function handler(req, res) {
         "X-Title": "Artemis AI Builder"
       },
       body: JSON.stringify({
-        model: "deepseek/deepseek-r1-0528:free",
+        model: "meta-llama/llama-3.3-70b-instruct:free",
         max_tokens: max_tokens || 8000,
         messages: orMessages
       })
