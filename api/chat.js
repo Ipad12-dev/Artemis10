@@ -34,13 +34,31 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const response = await fetch(endpoint, {
+    const sendRequest = (body) => fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(body)
     });
 
-    const data = await response.json();
+    let response = await sendRequest(payload);
+    let data = await response.json();
+
+    const errorMessage = data.error?.message || "";
+    const jsonModeFailed = response_format && /json|validate|schema|failed_generation/i.test(errorMessage);
+    if (jsonModeFailed) {
+      const fallbackPayload = { ...payload };
+      delete fallbackPayload.response_format;
+      fallbackPayload.messages = [
+        ...fullMessages,
+        {
+          role: "user",
+          content: "Your last response failed strict JSON validation. Return only one valid JSON object that matches the requested schema. Do not include markdown, commentary, or code fences.",
+        },
+      ];
+      response = await sendRequest(fallbackPayload);
+      data = await response.json();
+    }
+
     if (data.error) {
       const message = data.error.message || JSON.stringify(data.error);
       const status = response.status === 429 ? 429 : 500;
