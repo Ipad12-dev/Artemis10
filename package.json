@@ -1,0 +1,11 @@
+{
+  "name": "artemis-studio",
+  "private": true,
+  "scripts": {
+    "dev": "vercel dev --listen 3000",
+    "start": "vercel dev --listen 3000"
+  },
+  "devDependencies": {
+    "vercel": "^44.0.0"
+  }
+}

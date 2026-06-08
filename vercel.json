@@ -1,0 +1,14 @@
+{
+  "outputDirectory": "public",
+  "functions": {
+    "api/chat.js": {
+      "maxDuration": 60
+    },
+    "api/preview.js": {
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
+}
